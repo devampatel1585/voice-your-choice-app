@@ -70,65 +70,65 @@ const CandidateDetail = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto px-4 py-12">
+      <main className="container mx-auto px-4 py-6 sm:py-8 md:py-12">
         <div className="max-w-4xl mx-auto">
-          <Card className="mb-8 border-2">
-            <CardHeader className="pb-6">
-              <div className="flex items-center gap-6">
-                <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold text-3xl">
+          <Card className="mb-6 sm:mb-8 border-2">
+            <CardHeader className="pb-4 sm:pb-6 p-4 sm:p-6">
+              <div className="flex items-center gap-4 sm:gap-6">
+                <div className="h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold text-xl sm:text-2xl md:text-3xl flex-shrink-0">
                   {candidate.avatar}
                 </div>
-                <div>
-                  <CardTitle className="text-3xl mb-2">{candidate.name}</CardTitle>
-                  <CardDescription className="text-lg">{candidate.year}</CardDescription>
+                <div className="min-w-0">
+                  <CardTitle className="text-xl sm:text-2xl md:text-3xl mb-1 sm:mb-2">{candidate.name}</CardTitle>
+                  <CardDescription className="text-sm sm:text-base md:text-lg">{candidate.year}</CardDescription>
                 </div>
               </div>
             </CardHeader>
           </Card>
 
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="text-2xl">Manifesto</CardTitle>
+          <Card className="mb-6 sm:mb-8">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-xl sm:text-2xl">Manifesto</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground leading-relaxed text-base">
+            <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+              <p className="text-muted-foreground leading-relaxed text-sm sm:text-base">
                 {candidate.manifesto}
               </p>
             </CardContent>
           </Card>
 
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="text-2xl">Qualifications</CardTitle>
+          <Card className="mb-6 sm:mb-8">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-xl sm:text-2xl">Qualifications</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex gap-4">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Award className="h-6 w-6 text-primary" />
+            <CardContent className="space-y-4 sm:space-y-6 p-4 pt-0 sm:p-6 sm:pt-0">
+              <div className="flex gap-3 sm:gap-4">
+                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Award className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">Academic Achievements</h3>
-                  <p className="text-muted-foreground">{candidate.qualifications.academic}</p>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <div className="h-12 w-12 rounded-lg bg-secondary/10 flex items-center justify-center flex-shrink-0">
-                  <Users className="h-6 w-6 text-secondary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">Leadership Experience</h3>
-                  <p className="text-muted-foreground">{candidate.qualifications.leadership}</p>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-base sm:text-lg mb-1">Academic Achievements</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground">{candidate.qualifications.academic}</p>
                 </div>
               </div>
 
-              <div className="flex gap-4">
-                <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
-                  <BookOpen className="h-6 w-6 text-accent" />
+              <div className="flex gap-3 sm:gap-4">
+                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-secondary/10 flex items-center justify-center flex-shrink-0">
+                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-secondary" />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">Extracurricular Activities</h3>
-                  <p className="text-muted-foreground">{candidate.qualifications.extracurricular}</p>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-base sm:text-lg mb-1">Leadership Experience</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground">{candidate.qualifications.leadership}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 sm:gap-4">
+                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                  <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-accent" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-base sm:text-lg mb-1">Extracurricular Activities</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground">{candidate.qualifications.extracurricular}</p>
                 </div>
               </div>
             </CardContent>
@@ -137,7 +137,7 @@ const CandidateDetail = () => {
           <Button
             onClick={handleVote}
             size="lg"
-            className="w-full h-14 text-lg font-semibold"
+            className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold"
           >
             Vote Now
           </Button>
