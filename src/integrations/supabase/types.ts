@@ -14,13 +14,114 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      candidates: {
+        Row: {
+          avatar: string
+          created_at: string
+          id: string
+          manifesto: string
+          name: string
+          qualifications: string[]
+          tagline: string
+          votes: number
+        }
+        Insert: {
+          avatar: string
+          created_at?: string
+          id?: string
+          manifesto: string
+          name: string
+          qualifications?: string[]
+          tagline: string
+          votes?: number
+        }
+        Update: {
+          avatar?: string
+          created_at?: string
+          id?: string
+          manifesto?: string
+          name?: string
+          qualifications?: string[]
+          tagline?: string
+          votes?: number
+        }
+        Relationships: []
+      }
+      students: {
+        Row: {
+          created_at: string
+          has_voted: boolean
+          id: string
+          name: string
+          student_id: string
+          user_id: string | null
+          year: string
+        }
+        Insert: {
+          created_at?: string
+          has_voted?: boolean
+          id?: string
+          name: string
+          student_id: string
+          user_id?: string | null
+          year?: string
+        }
+        Update: {
+          created_at?: string
+          has_voted?: boolean
+          id?: string
+          name?: string
+          student_id?: string
+          user_id?: string | null
+          year?: string
+        }
+        Relationships: []
+      }
+      votes: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          id: string
+          student_id: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          id?: string
+          student_id: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: true
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_candidate_votes: {
+        Args: { candidate_uuid: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
