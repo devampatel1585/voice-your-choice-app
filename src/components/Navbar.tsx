@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Vote, Menu, LogOut } from "lucide-react";
+import { Vote, Menu, LogOut, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut } = useAuth();
+  const { isAdmin } = useIsAdmin();
 
   const handleSignOut = async () => {
     await signOut();
@@ -40,6 +42,12 @@ const Navbar = () => {
           <Link to="/results" className="text-sm font-medium hover:text-primary transition-colors">
             Results
           </Link>
+          {isAdmin && (
+            <Link to="/admin" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
+              <Shield className="h-4 w-4" />
+              Admin
+            </Link>
+          )}
           {user ? (
             <Button variant="outline" size="sm" onClick={handleSignOut}>
               <LogOut className="h-4 w-4 mr-2" />
@@ -82,6 +90,16 @@ const Navbar = () => {
               >
                 Results
               </Link>
+              {isAdmin && (
+                <Link 
+                  to="/admin" 
+                  className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <Shield className="h-5 w-5" />
+                  Admin
+                </Link>
+              )}
               {user ? (
                 <Button variant="outline" className="w-full" onClick={handleSignOut}>
                   <LogOut className="h-4 w-4 mr-2" />
