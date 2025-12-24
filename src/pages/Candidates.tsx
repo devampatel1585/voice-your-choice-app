@@ -6,19 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import VotingStatusBanner from "@/components/VotingStatusBanner";
 import { useCandidates } from "@/hooks/useCandidates";
 import { useAuth } from "@/contexts/AuthContext";
+import { useVotingDeadline } from "@/hooks/useVotingDeadline";
 
 const Candidates = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const { candidates, loading } = useCandidates();
   const { user } = useAuth();
+  const { deadline, isVotingOpen, loading: deadlineLoading } = useVotingDeadline();
 
   const filteredCandidates = candidates.filter((candidate) =>
     candidate.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (loading) {
+  if (loading || deadlineLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -39,14 +42,18 @@ const Candidates = () => {
               B.Tech 3rd Year Election
             </h1>
             <p className="text-base sm:text-lg text-muted-foreground px-4">
-              Vote for your representative. Click on a candidate to see their profile.
+              {isVotingOpen 
+                ? "Vote for your representative. Click on a candidate to see their profile."
+                : "Voting has ended. View candidate profiles below."}
             </p>
-            {!user && (
+            {!user && isVotingOpen && (
               <p className="text-sm text-primary mt-2">
                 <Link to="/login" className="underline hover:text-primary/80">Sign in</Link> to vote for your favorite candidate.
               </p>
             )}
           </div>
+
+          <VotingStatusBanner deadline={deadline} isVotingOpen={isVotingOpen} />
 
           <div className="relative mb-6 sm:mb-8">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />

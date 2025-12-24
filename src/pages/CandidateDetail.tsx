@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Award, BookOpen, Users, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Award, ArrowLeft, CheckCircle2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import VotingStatusBanner from "@/components/VotingStatusBanner";
 import { useCandidate } from "@/hooks/useCandidates";
 import { useVoting } from "@/hooks/useVoting";
 import { useAuth } from "@/contexts/AuthContext";
+import { useVotingDeadline } from "@/hooks/useVotingDeadline";
 
 const CandidateDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -17,8 +19,9 @@ const CandidateDetail = () => {
   const { candidate, loading } = useCandidate(id || "");
   const { castVote, voting, hasVoted } = useVoting();
   const { user } = useAuth();
+  const { deadline, isVotingOpen, loading: deadlineLoading } = useVotingDeadline();
 
-  if (loading) {
+  if (loading || deadlineLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -60,6 +63,47 @@ const CandidateDetail = () => {
     }
   };
 
+  const renderVoteButton = () => {
+    // Hide vote button if voting is closed
+    if (!isVotingOpen) {
+      return null;
+    }
+
+    if (!user) {
+      return (
+        <Button
+          size="lg"
+          className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold"
+          asChild
+        >
+          <Link to="/login">Sign in to Vote</Link>
+        </Button>
+      );
+    }
+
+    if (hasVoted) {
+      return (
+        <Button
+          size="lg"
+          className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold"
+          disabled
+        >
+          Already Voted
+        </Button>
+      );
+    }
+
+    return (
+      <Button
+        onClick={handleVote}
+        size="lg"
+        className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:opacity-90"
+      >
+        Vote Now
+      </Button>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -73,6 +117,8 @@ const CandidateDetail = () => {
             <ArrowLeft className="h-4 w-4 mr-2" />
             <span className="text-sm sm:text-base">Back to Candidates</span>
           </Button>
+
+          <VotingStatusBanner deadline={deadline} isVotingOpen={isVotingOpen} />
 
           <Card className="mb-6 sm:mb-8 border-2">
             <CardHeader className="pb-4 sm:pb-6 p-4 sm:p-6">
@@ -119,31 +165,7 @@ const CandidateDetail = () => {
             </CardContent>
           </Card>
 
-          {!user ? (
-            <Button
-              size="lg"
-              className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold"
-              asChild
-            >
-              <Link to="/login">Sign in to Vote</Link>
-            </Button>
-          ) : hasVoted ? (
-            <Button
-              size="lg"
-              className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold"
-              disabled
-            >
-              Already Voted
-            </Button>
-          ) : (
-            <Button
-              onClick={handleVote}
-              size="lg"
-              className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:opacity-90"
-            >
-              Vote Now
-            </Button>
-          )}
+          {renderVoteButton()}
         </div>
       </main>
 
