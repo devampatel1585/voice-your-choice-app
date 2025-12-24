@@ -34,14 +34,7 @@ export const useVoting = () => {
         return false;
       }
 
-      // Increment candidate votes
-      const { error: incrementError } = await supabase.rpc("increment_candidate_votes", {
-        candidate_uuid: candidateId,
-      });
-
-      if (incrementError) {
-        console.error("Error incrementing votes:", incrementError);
-      }
+      // Vote count is automatically incremented by database trigger
 
       // Mark student as voted
       const { error: updateError } = await supabase

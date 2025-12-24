@@ -170,10 +170,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      increment_candidate_votes: {
-        Args: { candidate_uuid: string }
-        Returns: undefined
-      }
     }
     Enums: {
       app_role: "admin" | "user"
