@@ -1,34 +1,34 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Trophy } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Trophy, Medal } from "lucide-react";
 import Navbar from "@/components/Navbar";
-
-const resultsData = [
-  {
-    name: "Sophia Carter",
-    avatar: "SC",
-    votes: 1250,
-    percentage: 62.5,
-    isWinner: true,
-  },
-  {
-    name: "Ethan Bennett",
-    avatar: "EB",
-    votes: 980,
-    percentage: 31.8,
-    isWinner: false,
-  },
-  {
-    name: "Olivia Davis",
-    avatar: "OD",
-    votes: 720,
-    percentage: 5.7,
-    isWinner: false,
-  },
-];
+import { useCandidates } from "@/hooks/useCandidates";
 
 const Results = () => {
-  const winner = resultsData.find((r) => r.isWinner);
+  const { candidates, loading } = useCandidates();
+
+  const totalVotes = candidates.reduce((sum, c) => sum + c.votes, 0);
+  
+  const resultsData = candidates
+    .map((candidate) => ({
+      ...candidate,
+      percentage: totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0,
+    }))
+    .sort((a, b) => b.votes - a.votes);
+
+  const winner = resultsData[0];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,9 +38,10 @@ const Results = () => {
           <div className="text-center mb-8 sm:mb-12">
             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 px-4">Election Results</h1>
             <p className="text-base sm:text-lg md:text-xl text-muted-foreground px-4">3rd Year B.Tech Representative</p>
+            <p className="text-sm text-muted-foreground mt-2">Total votes cast: {totalVotes}</p>
           </div>
 
-          {winner && (
+          {winner && totalVotes > 0 && (
             <Card className="mb-8 sm:mb-12 border-2 border-success bg-gradient-to-br from-success/5 to-transparent">
               <CardHeader className="text-center pb-4 sm:pb-6 p-4 sm:p-6">
                 <div className="flex justify-center mb-3 sm:mb-4">
@@ -49,6 +50,12 @@ const Results = () => {
                   </div>
                 </div>
                 <CardTitle className="text-2xl sm:text-3xl mb-2">Winner</CardTitle>
+                <Avatar className="h-20 w-20 sm:h-24 sm:w-24 mx-auto mb-3 ring-4 ring-success/50">
+                  <AvatarImage src={winner.avatar} alt={winner.name} />
+                  <AvatarFallback className="bg-gradient-to-br from-success to-secondary text-white font-bold text-2xl">
+                    {winner.name.split(" ").map((n) => n[0]).join("")}
+                  </AvatarFallback>
+                </Avatar>
                 <CardDescription className="text-lg sm:text-xl font-semibold text-foreground">
                   {winner.name}
                 </CardDescription>
@@ -64,21 +71,36 @@ const Results = () => {
             </Card>
           )}
 
+          {totalVotes === 0 && (
+            <Card className="mb-8 sm:mb-12 text-center py-10">
+              <CardContent>
+                <p className="text-muted-foreground">No votes have been cast yet. Be the first to vote!</p>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-xl sm:text-2xl">Vote Distribution</CardTitle>
+              <CardTitle className="text-xl sm:text-2xl flex items-center gap-2">
+                <Medal className="h-5 w-5 text-primary" />
+                Vote Distribution
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 sm:space-y-6 p-4 pt-0 sm:p-6 sm:pt-0">
-              {resultsData.map((candidate) => (
-                <div key={candidate.name} className="space-y-2">
+              {resultsData.map((candidate, index) => (
+                <div key={candidate.id} className="space-y-2">
                   <div className="flex items-center gap-3 sm:gap-4">
-                    <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full ${
-                      candidate.isWinner 
-                        ? 'bg-gradient-to-br from-success to-secondary' 
-                        : 'bg-gradient-to-br from-primary to-accent'
-                    } flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0`}>
-                      {candidate.avatar}
-                    </div>
+                    <span className="text-lg font-bold text-muted-foreground w-6">#{index + 1}</span>
+                    <Avatar className={`h-10 w-10 sm:h-12 sm:w-12 ${index === 0 && totalVotes > 0 ? 'ring-2 ring-success' : ''}`}>
+                      <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                      <AvatarFallback className={`${
+                        index === 0 && totalVotes > 0
+                          ? 'bg-gradient-to-br from-success to-secondary' 
+                          : 'bg-gradient-to-br from-primary to-accent'
+                      } text-white font-bold text-sm sm:text-base`}>
+                        {candidate.name.split(" ").map((n) => n[0]).join("")}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline gap-1 sm:gap-2 mb-1">
                         <p className="font-semibold text-base sm:text-lg truncate">{candidate.name}</p>

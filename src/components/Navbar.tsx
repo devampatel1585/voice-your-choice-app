@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Vote, Menu, X } from "lucide-react";
+import { Vote, Menu, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    setIsOpen(false);
+  };
 
   return (
     <nav className="border-b bg-card/50 backdrop-blur sticky top-0 z-50">
@@ -33,9 +40,16 @@ const Navbar = () => {
           <Link to="/results" className="text-sm font-medium hover:text-primary transition-colors">
             Results
           </Link>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/login">Sign In</Link>
-          </Button>
+          {user ? (
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/login">Sign In</Link>
+            </Button>
+          )}
         </div>
 
         {/* Mobile Navigation */}
@@ -68,9 +82,16 @@ const Navbar = () => {
               >
                 Results
               </Link>
-              <Button variant="outline" asChild className="w-full">
-                <Link to="/login" onClick={() => setIsOpen(false)}>Sign In</Link>
-              </Button>
+              {user ? (
+                <Button variant="outline" className="w-full" onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              ) : (
+                <Button variant="outline" asChild className="w-full">
+                  <Link to="/login" onClick={() => setIsOpen(false)}>Sign In</Link>
+                </Button>
+              )}
             </div>
           </SheetContent>
         </Sheet>
