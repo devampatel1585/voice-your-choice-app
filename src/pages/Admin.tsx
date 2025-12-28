@@ -7,11 +7,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Calendar, Clock, Shield } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Settings, Calendar, Clock, Shield, Users, Plus, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+
+interface Candidate {
+  id: string;
+  name: string;
+  tagline: string;
+  avatar: string;
+  manifesto: string;
+  qualifications: string[];
+  votes: number;
+}
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -21,6 +34,24 @@ const Admin = () => {
   const [time, setTime] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // Candidate management state
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loadingCandidates, setLoadingCandidates] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+  const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
+  const [savingCandidate, setSavingCandidate] = useState(false);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    name: "",
+    tagline: "",
+    avatar: "",
+    manifesto: "",
+    qualifications: "",
+  });
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -50,8 +81,22 @@ const Admin = () => {
       }
     };
 
+    const fetchCandidates = async () => {
+      setLoadingCandidates(true);
+      const { data, error } = await supabase
+        .from("candidates")
+        .select("*")
+        .order("name");
+      
+      if (!error && data) {
+        setCandidates(data);
+      }
+      setLoadingCandidates(false);
+    };
+
     if (isAdmin) {
       fetchSettings();
+      fetchCandidates();
     }
   }, [user, authLoading, isAdmin, adminLoading, navigate]);
 
@@ -84,6 +129,116 @@ const Admin = () => {
     }
   };
 
+  const openAddDialog = () => {
+    setSelectedCandidate(null);
+    setFormData({
+      name: "",
+      tagline: "",
+      avatar: "",
+      manifesto: "",
+      qualifications: "",
+    });
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (candidate: Candidate) => {
+    setSelectedCandidate(candidate);
+    setFormData({
+      name: candidate.name,
+      tagline: candidate.tagline,
+      avatar: candidate.avatar,
+      manifesto: candidate.manifesto,
+      qualifications: candidate.qualifications.join("\n"),
+    });
+    setDialogOpen(true);
+  };
+
+  const openDeleteDialog = (candidate: Candidate) => {
+    setCandidateToDelete(candidate);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleSaveCandidate = async () => {
+    if (!formData.name || !formData.tagline || !formData.avatar || !formData.manifesto) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    setSavingCandidate(true);
+    const qualificationsArray = formData.qualifications
+      .split("\n")
+      .map((q) => q.trim())
+      .filter((q) => q.length > 0);
+
+    if (selectedCandidate) {
+      // Update existing candidate
+      const { error } = await supabase
+        .from("candidates")
+        .update({
+          name: formData.name,
+          tagline: formData.tagline,
+          avatar: formData.avatar,
+          manifesto: formData.manifesto,
+          qualifications: qualificationsArray,
+        })
+        .eq("id", selectedCandidate.id);
+
+      if (error) {
+        toast.error("Failed to update candidate");
+      } else {
+        toast.success("Candidate updated successfully!");
+        setCandidates((prev) =>
+          prev.map((c) =>
+            c.id === selectedCandidate.id
+              ? { ...c, ...formData, qualifications: qualificationsArray }
+              : c
+          )
+        );
+        setDialogOpen(false);
+      }
+    } else {
+      // Add new candidate
+      const { data, error } = await supabase
+        .from("candidates")
+        .insert({
+          name: formData.name,
+          tagline: formData.tagline,
+          avatar: formData.avatar,
+          manifesto: formData.manifesto,
+          qualifications: qualificationsArray,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        toast.error("Failed to add candidate");
+      } else {
+        toast.success("Candidate added successfully!");
+        setCandidates((prev) => [...prev, data]);
+        setDialogOpen(false);
+      }
+    }
+    setSavingCandidate(false);
+  };
+
+  const handleDeleteCandidate = async () => {
+    if (!candidateToDelete) return;
+
+    const { error } = await supabase
+      .from("candidates")
+      .delete()
+      .eq("id", candidateToDelete.id);
+
+    if (error) {
+      toast.error("Failed to delete candidate");
+    } else {
+      toast.success("Candidate deleted successfully!");
+      setCandidates((prev) => prev.filter((c) => c.id !== candidateToDelete.id));
+    }
+    setDeleteDialogOpen(false);
+    setCandidateToDelete(null);
+  };
+
   if (authLoading || adminLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -103,17 +258,18 @@ const Admin = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-6 sm:py-8 md:py-12">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-4xl mx-auto space-y-8">
           <div className="flex items-center gap-3 mb-6 sm:mb-8">
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
               <Shield className="h-6 w-6 text-primary" />
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold">Admin Panel</h1>
-              <p className="text-sm text-muted-foreground">Manage election settings</p>
+              <p className="text-sm text-muted-foreground">Manage election settings and candidates</p>
             </div>
           </div>
 
+          {/* Voting Deadline Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -184,8 +340,193 @@ const Admin = () => {
               </Button>
             </CardContent>
           </Card>
+
+          {/* Candidate Management Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Manage Candidates
+                  </CardTitle>
+                  <CardDescription>
+                    Add, edit, or remove election candidates
+                  </CardDescription>
+                </div>
+                <Button onClick={openAddDialog} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Candidate
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingCandidates ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                </div>
+              ) : candidates.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No candidates yet. Add your first candidate!
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {candidates.map((candidate) => (
+                    <div
+                      key={candidate.id}
+                      className="flex items-center gap-4 p-4 border rounded-lg"
+                    >
+                      <img
+                        src={candidate.avatar}
+                        alt={candidate.name}
+                        className="h-12 w-12 rounded-full object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold truncate">{candidate.name}</h3>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {candidate.tagline}
+                        </p>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {candidate.votes} votes
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => openEditDialog(candidate)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => openDeleteDialog(candidate)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </main>
+
+      {/* Add/Edit Candidate Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedCandidate ? "Edit Candidate" : "Add New Candidate"}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedCandidate
+                ? "Update the candidate's information below."
+                : "Fill in the details for the new candidate."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                }
+                placeholder="Candidate name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tagline">Tagline *</Label>
+              <Input
+                id="tagline"
+                value={formData.tagline}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, tagline: e.target.value }))
+                }
+                placeholder="Brief tagline or slogan"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="avatar">Avatar URL *</Label>
+              <Input
+                id="avatar"
+                value={formData.avatar}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, avatar: e.target.value }))
+                }
+                placeholder="https://example.com/avatar.jpg"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manifesto">Manifesto *</Label>
+              <Textarea
+                id="manifesto"
+                value={formData.manifesto}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, manifesto: e.target.value }))
+                }
+                placeholder="Candidate's manifesto and goals..."
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qualifications">Qualifications (one per line)</Label>
+              <Textarea
+                id="qualifications"
+                value={formData.qualifications}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    qualifications: e.target.value,
+                  }))
+                }
+                placeholder="Previous Student Council Member&#10;3.8 GPA&#10;Club President"
+                rows={3}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveCandidate} disabled={savingCandidate}>
+              {savingCandidate
+                ? "Saving..."
+                : selectedCandidate
+                ? "Update Candidate"
+                : "Add Candidate"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Candidate</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {candidateToDelete?.name}? This
+              action cannot be undone and will also remove all associated votes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCandidate}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
