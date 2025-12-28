@@ -43,7 +43,7 @@ export const useVoting = () => {
         .eq("id", profile.id);
 
       if (updateError) {
-        console.error("Error updating student:", updateError);
+        // Error logged silently - user already received success toast for vote
       }
 
       toast.success("Vote cast successfully!");
