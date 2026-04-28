@@ -34,17 +34,7 @@ export const useVoting = () => {
         return false;
       }
 
-      // Vote count is automatically incremented by database trigger
-
-      // Mark student as voted
-      const { error: updateError } = await supabase
-        .from("students")
-        .update({ has_voted: true })
-        .eq("id", profile.id);
-
-      if (updateError) {
-        // Error logged silently - user already received success toast for vote
-      }
+      // Vote count and has_voted flag are atomically updated by the database trigger
 
       toast.success("Vote cast successfully!");
       return true;
