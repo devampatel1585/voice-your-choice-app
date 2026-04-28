@@ -45,6 +45,7 @@ const Admin = () => {
   const [savingCandidate, setSavingCandidate] = useState(false);
   const [restartDialogOpen, setRestartDialogOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [togglingActive, setTogglingActive] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -128,6 +129,34 @@ const Admin = () => {
       toast.error("Failed to save settings");
     } else {
       toast.success("Voting deadline updated successfully!");
+    }
+  };
+
+  const handleToggleActive = async (newActive: boolean) => {
+    if (!deadline || !time) {
+      toast.error("Please set a deadline date and time first");
+      return;
+    }
+    setTogglingActive(true);
+    const previous = isActive;
+    setIsActive(newActive);
+    const deadlineDateTime = new Date(`${deadline}T${time}`);
+    const { error } = await supabase
+      .from("election_settings")
+      .update({
+        value: {
+          deadline: deadlineDateTime.toISOString(),
+          is_active: newActive,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("key", "voting_deadline");
+    setTogglingActive(false);
+    if (error) {
+      setIsActive(previous);
+      toast.error("Failed to update voting status");
+    } else {
+      toast.success(newActive ? "Voting resumed" : "Voting stopped");
     }
   };
 
