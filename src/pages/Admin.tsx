@@ -363,6 +363,38 @@ const Admin = () => {
             </div>
           </div>
 
+          {/* Election Name Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Tag className="h-5 w-5" />
+                Election Name
+              </CardTitle>
+              <CardDescription>
+                Set the name of the current election (e.g., "B.Tech 2nd Year Election", "4th Semester Election"). This title appears across the site for students.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="electionName">Election Title</Label>
+                <Input
+                  id="electionName"
+                  value={electionName}
+                  onChange={(e) => setElectionName(e.target.value)}
+                  placeholder="e.g., B.Tech 2nd Year Election"
+                  className="h-12"
+                />
+              </div>
+              <Button
+                onClick={handleSaveElectionName}
+                disabled={savingName}
+                className="w-full h-12"
+              >
+                {savingName ? "Saving..." : "Save Election Name"}
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* Voting Deadline Card */}
           <Card>
             <CardHeader>
