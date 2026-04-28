@@ -10,12 +10,14 @@ import VotingStatusBanner from "@/components/VotingStatusBanner";
 import { useCandidates } from "@/hooks/useCandidates";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVotingDeadline } from "@/hooks/useVotingDeadline";
+import { useElectionName } from "@/hooks/useElectionName";
 
 const Candidates = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const { candidates, loading } = useCandidates();
   const { user } = useAuth();
   const { deadline, isVotingOpen, loading: deadlineLoading } = useVotingDeadline();
+  const { electionName } = useElectionName();
 
   const filteredCandidates = candidates.filter((candidate) =>
     candidate.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -39,7 +41,7 @@ const Candidates = () => {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8 sm:mb-12">
             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent px-4">
-              B.Tech 3rd Year Election
+              {electionName}
             </h1>
             <p className="text-base sm:text-lg text-muted-foreground px-4">
               {isVotingOpen 
