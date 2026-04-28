@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Settings, Calendar, Clock, Shield, Users, Plus, Pencil, Trash2, X, RotateCcw } from "lucide-react";
+import { Settings, Calendar, Clock, Shield, Users, Plus, Pencil, Trash2, X, RotateCcw, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,6 +46,8 @@ const Admin = () => {
   const [restartDialogOpen, setRestartDialogOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [togglingActive, setTogglingActive] = useState(false);
+  const [electionName, setElectionName] = useState("");
+  const [savingName, setSavingName] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -84,6 +86,18 @@ const Admin = () => {
       }
     };
 
+    const fetchElectionName = async () => {
+      const { data } = await supabase
+        .from("election_settings")
+        .select("value")
+        .eq("key", "election_name")
+        .maybeSingle();
+      if (data?.value) {
+        const v = data.value as { name?: string };
+        if (v?.name) setElectionName(v.name);
+      }
+    };
+
     const fetchCandidates = async () => {
       setLoadingCandidates(true);
       const { data, error } = await supabase
@@ -100,6 +114,7 @@ const Admin = () => {
     if (isAdmin) {
       fetchSettings();
       fetchCandidates();
+      fetchElectionName();
     }
   }, [user, authLoading, isAdmin, adminLoading, navigate]);
 
@@ -129,6 +144,31 @@ const Admin = () => {
       toast.error("Failed to save settings");
     } else {
       toast.success("Voting deadline updated successfully!");
+    }
+  };
+
+  const handleSaveElectionName = async () => {
+    const trimmed = electionName.trim();
+    if (!trimmed) {
+      toast.error("Election name cannot be empty");
+      return;
+    }
+    setSavingName(true);
+    const { error } = await supabase
+      .from("election_settings")
+      .upsert(
+        {
+          key: "election_name",
+          value: { name: trimmed },
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" }
+      );
+    setSavingName(false);
+    if (error) {
+      toast.error("Failed to save election name");
+    } else {
+      toast.success("Election name updated!");
     }
   };
 
@@ -322,6 +362,38 @@ const Admin = () => {
               <p className="text-sm text-muted-foreground">Manage election settings and candidates</p>
             </div>
           </div>
+
+          {/* Election Name Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Tag className="h-5 w-5" />
+                Election Name
+              </CardTitle>
+              <CardDescription>
+                Set the name of the current election (e.g., "B.Tech 2nd Year Election", "4th Semester Election"). This title appears across the site for students.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="electionName">Election Title</Label>
+                <Input
+                  id="electionName"
+                  value={electionName}
+                  onChange={(e) => setElectionName(e.target.value)}
+                  placeholder="e.g., B.Tech 2nd Year Election"
+                  className="h-12"
+                />
+              </div>
+              <Button
+                onClick={handleSaveElectionName}
+                disabled={savingName}
+                className="w-full h-12"
+              >
+                {savingName ? "Saving..." : "Save Election Name"}
+              </Button>
+            </CardContent>
+          </Card>
 
           {/* Voting Deadline Card */}
           <Card>

@@ -11,6 +11,7 @@ import { useCandidate } from "@/hooks/useCandidates";
 import { useVoting } from "@/hooks/useVoting";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVotingDeadline } from "@/hooks/useVotingDeadline";
+import { useElectionName } from "@/hooks/useElectionName";
 
 const CandidateDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +21,7 @@ const CandidateDetail = () => {
   const { castVote, voting, hasVoted } = useVoting();
   const { user } = useAuth();
   const { deadline, isVotingOpen, loading: deadlineLoading } = useVotingDeadline();
+  const { electionName } = useElectionName();
 
   if (loading || deadlineLoading) {
     return (
@@ -131,7 +133,7 @@ const CandidateDetail = () => {
                 </Avatar>
                 <div className="min-w-0">
                   <CardTitle className="text-xl sm:text-2xl md:text-3xl mb-1 sm:mb-2">{candidate.name}</CardTitle>
-                  <CardDescription className="text-sm sm:text-base md:text-lg">B.Tech 3rd Year</CardDescription>
+                  <CardDescription className="text-sm sm:text-base md:text-lg">{electionName}</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -188,7 +190,7 @@ const CandidateDetail = () => {
               </Avatar>
               <div>
                 <p className="font-semibold text-base sm:text-lg">{candidate.name}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">B.Tech 3rd Year</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">{electionName}</p>
               </div>
             </div>
           </div>

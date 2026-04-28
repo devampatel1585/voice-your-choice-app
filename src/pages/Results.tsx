@@ -4,9 +4,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Trophy, Medal } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useCandidates } from "@/hooks/useCandidates";
+import { useElectionName } from "@/hooks/useElectionName";
 
 const Results = () => {
   const { candidates, loading } = useCandidates();
+  const { electionName } = useElectionName();
 
   const totalVotes = candidates.reduce((sum, c) => sum + c.votes, 0);
   
@@ -37,7 +39,7 @@ const Results = () => {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8 sm:mb-12">
             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 px-4">Election Results</h1>
-            <p className="text-base sm:text-lg md:text-xl text-muted-foreground px-4">3rd Year B.Tech Representative</p>
+            <p className="text-base sm:text-lg md:text-xl text-muted-foreground px-4">{electionName}</p>
             <p className="text-sm text-muted-foreground mt-2">Total votes cast: {totalVotes}</p>
           </div>
 
