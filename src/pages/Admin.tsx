@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Settings, Calendar, Clock, Shield, Users, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Settings, Calendar, Clock, Shield, Users, Plus, Pencil, Trash2, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,6 +43,8 @@ const Admin = () => {
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
   const [savingCandidate, setSavingCandidate] = useState(false);
+  const [restartDialogOpen, setRestartDialogOpen] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -239,6 +241,29 @@ const Admin = () => {
     setCandidateToDelete(null);
   };
 
+  const handleRestartVoting = async () => {
+    if (!deadline || !time) {
+      toast.error("Please set a new deadline date and time first");
+      return;
+    }
+    setRestarting(true);
+    const newDeadline = new Date(`${deadline}T${time}`);
+    const { error } = await supabase.rpc("restart_voting", {
+      _new_deadline: newDeadline.toISOString(),
+    });
+    setRestarting(false);
+    setRestartDialogOpen(false);
+    if (error) {
+      toast.error("Failed to restart voting: " + error.message);
+    } else {
+      setIsActive(true);
+      toast.success("Voting restarted! All votes cleared and students can vote again.");
+      // Refresh candidates to reflect cleared vote counts
+      const { data } = await supabase.from("candidates").select("*").order("name");
+      if (data) setCandidates(data);
+    }
+  };
+
   if (authLoading || adminLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -338,6 +363,25 @@ const Admin = () => {
               >
                 {saving ? "Saving..." : "Save Settings"}
               </Button>
+
+              <div className="border-t pt-4">
+                <div className="flex items-start gap-3 p-4 bg-destructive/5 border border-destructive/20 rounded-lg">
+                  <RotateCcw className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">Restart Voting</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Clears all cast votes, resets every student's voting status, and reactivates voting using the deadline above.
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setRestartDialogOpen(true)}
+                  >
+                    Restart
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -523,6 +567,29 @@ const Admin = () => {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Restart Voting Confirmation */}
+      <AlertDialog open={restartDialogOpen} onOpenChange={setRestartDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restart voting?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all cast votes, reset every student's voting status,
+              and reopen voting until the deadline you've set above. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={restarting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRestartVoting}
+              disabled={restarting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {restarting ? "Restarting..." : "Yes, restart voting"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
