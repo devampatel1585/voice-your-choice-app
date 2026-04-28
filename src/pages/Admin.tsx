@@ -45,6 +45,7 @@ const Admin = () => {
   const [savingCandidate, setSavingCandidate] = useState(false);
   const [restartDialogOpen, setRestartDialogOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [togglingActive, setTogglingActive] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -128,6 +129,34 @@ const Admin = () => {
       toast.error("Failed to save settings");
     } else {
       toast.success("Voting deadline updated successfully!");
+    }
+  };
+
+  const handleToggleActive = async (newActive: boolean) => {
+    if (!deadline || !time) {
+      toast.error("Please set a deadline date and time first");
+      return;
+    }
+    setTogglingActive(true);
+    const previous = isActive;
+    setIsActive(newActive);
+    const deadlineDateTime = new Date(`${deadline}T${time}`);
+    const { error } = await supabase
+      .from("election_settings")
+      .update({
+        value: {
+          deadline: deadlineDateTime.toISOString(),
+          is_active: newActive,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("key", "voting_deadline");
+    setTogglingActive(false);
+    if (error) {
+      setIsActive(previous);
+      toast.error("Failed to update voting status");
+    } else {
+      toast.success(newActive ? "Voting resumed" : "Voting stopped");
     }
   };
 
@@ -308,12 +337,16 @@ const Admin = () => {
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Voting Active</Label>
+                  <Label>{isActive ? "Voting is Active" : "Voting is Stopped"}</Label>
                   <p className="text-sm text-muted-foreground">
-                    Toggle to enable/disable voting manually
+                    Turn off to immediately stop voting. Turn on to resume voting until the deadline.
                   </p>
                 </div>
-                <Switch checked={isActive} onCheckedChange={setIsActive} />
+                <Switch
+                  checked={isActive}
+                  onCheckedChange={handleToggleActive}
+                  disabled={togglingActive}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
