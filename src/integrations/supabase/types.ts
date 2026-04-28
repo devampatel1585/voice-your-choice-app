@@ -170,6 +170,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      restart_voting: { Args: { _new_deadline: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"
