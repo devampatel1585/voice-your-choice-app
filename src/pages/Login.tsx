@@ -58,9 +58,9 @@ const Login = () => {
               <Vote className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-3xl font-bold">Cast Your Vote!</CardTitle>
+          <CardTitle className="text-3xl font-bold">Sign In</CardTitle>
           <CardDescription className="text-base">
-            Sign in to the B.Tech 3rd Year Elections
+            Sign in to your account
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>

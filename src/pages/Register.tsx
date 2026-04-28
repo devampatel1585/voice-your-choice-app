@@ -71,9 +71,9 @@ const Register = () => {
               <Vote className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl sm:text-3xl font-bold">Join the Election!</CardTitle>
+          <CardTitle className="text-2xl sm:text-3xl font-bold">Register</CardTitle>
           <CardDescription className="text-base">
-            Register to vote in B.Tech 3rd Year Elections
+            Create your account
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleRegister}>
