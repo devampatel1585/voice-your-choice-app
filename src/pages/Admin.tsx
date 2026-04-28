@@ -337,12 +337,16 @@ const Admin = () => {
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Voting Active</Label>
+                  <Label>{isActive ? "Voting is Active" : "Voting is Stopped"}</Label>
                   <p className="text-sm text-muted-foreground">
-                    Toggle to enable/disable voting manually
+                    Turn off to immediately stop voting. Turn on to resume voting until the deadline.
                   </p>
                 </div>
-                <Switch checked={isActive} onCheckedChange={setIsActive} />
+                <Switch
+                  checked={isActive}
+                  onCheckedChange={handleToggleActive}
+                  disabled={togglingActive}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
