@@ -59,38 +59,3 @@ export const useVoting = () => {
 
   return { castVote, voting };
 };
-
-export const useHasVotedInClass = (classId: string | null | undefined) => {
-  const { profile } = useStudentProfile();
-  const [hasVoted, setHasVoted] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const check = async () => {
-    if (!profile || !classId) {
-      setHasVoted(false);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const { data } = await supabase
-      .from("votes")
-      .select("id")
-      .eq("student_id", profile.id)
-      .eq("class_id", classId)
-      .maybeSingle();
-    setHasVoted(!!data);
-    setLoading(false);
-  };
-
-  useState(() => {
-    check();
-  });
-
-  // rerun when deps change
-  const key = `${profile?.id ?? ""}-${classId ?? ""}`;
-  useState(() => {
-    void key;
-  });
-
-  return { hasVoted, loading, refresh: check };
-};
