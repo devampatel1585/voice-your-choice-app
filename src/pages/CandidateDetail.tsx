@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,20 +10,32 @@ import VotingStatusBanner from "@/components/VotingStatusBanner";
 import { useCandidate } from "@/hooks/useCandidates";
 import { useVoting } from "@/hooks/useVoting";
 import { useAuth } from "@/contexts/AuthContext";
-import { useVotingDeadline } from "@/hooks/useVotingDeadline";
-import { useElectionName } from "@/hooks/useElectionName";
+import { useHasVotedInClass } from "@/hooks/useHasVotedInClass";
+import { supabase } from "@/integrations/supabase/client";
+
+interface ClassRow { id: string; name: string; deadline: string; is_active: boolean; }
 
 const CandidateDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [showVoteDialog, setShowVoteDialog] = useState(false);
   const { candidate, loading } = useCandidate(id || "");
-  const { castVote, voting, hasVoted } = useVoting();
+  const { castVote, voting } = useVoting();
   const { user } = useAuth();
-  const { deadline, isVotingOpen, loading: deadlineLoading } = useVotingDeadline();
-  const { electionName } = useElectionName();
+  const { hasVoted, refresh } = useHasVotedInClass(candidate?.class_id ?? null);
+  const [classRow, setClassRow] = useState<ClassRow | null>(null);
+  const [classLoading, setClassLoading] = useState(true);
 
-  if (loading || deadlineLoading) {
+  useEffect(() => {
+    if (!candidate?.class_id) return;
+    setClassLoading(true);
+    supabase.from("classes").select("id, name, deadline, is_active").eq("id", candidate.class_id).maybeSingle().then(({ data }) => {
+      if (data) setClassRow(data as ClassRow);
+      setClassLoading(false);
+    });
+  }, [candidate?.class_id]);
+
+  if (loading || classLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -40,70 +52,30 @@ const CandidateDetail = () => {
         <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <h1 className="text-2xl font-bold mb-4">Candidate Not Found</h1>
-          <p className="text-muted-foreground mb-6">The candidate you're looking for doesn't exist.</p>
-          <Button asChild>
-            <Link to="/candidates">Back to Candidates</Link>
-          </Button>
+          <Button asChild><Link to="/candidates">Back to Candidates</Link></Button>
         </div>
       </div>
     );
   }
 
+  const deadlineDate = classRow ? new Date(classRow.deadline) : null;
+  const isVotingOpen = !!classRow && classRow.is_active && !!deadlineDate && deadlineDate > new Date();
+
   const handleVote = () => {
-    if (!user) {
-      navigate("/login");
-      return;
-    }
+    if (!user) { navigate("/login"); return; }
     setShowVoteDialog(true);
   };
 
   const confirmVote = async () => {
     const success = await castVote(candidate.id);
-    if (success) {
-      setShowVoteDialog(false);
-      navigate("/thank-you");
-    }
+    if (success) { setShowVoteDialog(false); await refresh(); navigate("/thank-you"); }
   };
 
   const renderVoteButton = () => {
-    // Hide vote button if voting is closed
-    if (!isVotingOpen) {
-      return null;
-    }
-
-    if (!user) {
-      return (
-        <Button
-          size="lg"
-          className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold"
-          asChild
-        >
-          <Link to="/login">Sign in to Vote</Link>
-        </Button>
-      );
-    }
-
-    if (hasVoted) {
-      return (
-        <Button
-          size="lg"
-          className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold"
-          disabled
-        >
-          Already Voted
-        </Button>
-      );
-    }
-
-    return (
-      <Button
-        onClick={handleVote}
-        size="lg"
-        className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:opacity-90"
-      >
-        Vote Now
-      </Button>
-    );
+    if (!isVotingOpen) return null;
+    if (!user) return <Button size="lg" className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold" asChild><Link to="/login">Sign in to Vote</Link></Button>;
+    if (hasVoted) return <Button size="lg" className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold" disabled>Already Voted</Button>;
+    return <Button onClick={handleVote} size="lg" className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:opacity-90">Vote Now</Button>;
   };
 
   return (
@@ -111,17 +83,11 @@ const CandidateDetail = () => {
       <Navbar />
       <main className="container mx-auto px-4 py-6 sm:py-8 md:py-12">
         <div className="max-w-4xl mx-auto">
-          <Button
-            variant="ghost"
-            className="mb-4 sm:mb-6"
-            onClick={() => navigate("/candidates")}
-          >
+          <Button variant="ghost" className="mb-4 sm:mb-6" onClick={() => navigate("/candidates")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             <span className="text-sm sm:text-base">Back to Candidates</span>
           </Button>
-
-          <VotingStatusBanner deadline={deadline} isVotingOpen={isVotingOpen} />
-
+          <VotingStatusBanner deadline={deadlineDate} isVotingOpen={isVotingOpen} />
           <Card className="mb-6 sm:mb-8 border-2">
             <CardHeader className="pb-4 sm:pb-6 p-4 sm:p-6">
               <div className="flex items-center gap-4 sm:gap-6">
@@ -133,28 +99,21 @@ const CandidateDetail = () => {
                 </Avatar>
                 <div className="min-w-0">
                   <CardTitle className="text-xl sm:text-2xl md:text-3xl mb-1 sm:mb-2">{candidate.name}</CardTitle>
-                  <CardDescription className="text-sm sm:text-base md:text-lg">{electionName}</CardDescription>
+                  <CardDescription className="text-sm sm:text-base md:text-lg">{classRow?.name ?? ""}</CardDescription>
                 </div>
               </div>
             </CardHeader>
           </Card>
-
           <Card className="mb-6 sm:mb-8">
-            <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-xl sm:text-2xl">Manifesto</CardTitle>
-            </CardHeader>
+            <CardHeader className="p-4 sm:p-6"><CardTitle className="text-xl sm:text-2xl">Manifesto</CardTitle></CardHeader>
             <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
-              <p className="text-muted-foreground leading-relaxed text-sm sm:text-base">
-                {candidate.manifesto}
-              </p>
+              <p className="text-muted-foreground leading-relaxed text-sm sm:text-base">{candidate.manifesto}</p>
             </CardContent>
           </Card>
-
           <Card className="mb-6 sm:mb-8">
             <CardHeader className="p-4 sm:p-6">
               <CardTitle className="text-xl sm:text-2xl flex items-center gap-2">
-                <Award className="h-5 w-5 text-primary" />
-                Qualifications & Achievements
+                <Award className="h-5 w-5 text-primary" /> Qualifications & Achievements
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 sm:space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
@@ -166,18 +125,14 @@ const CandidateDetail = () => {
               ))}
             </CardContent>
           </Card>
-
           {renderVoteButton()}
         </div>
       </main>
-
       <Dialog open={showVoteDialog} onOpenChange={setShowVoteDialog}>
         <DialogContent className="max-w-[90vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-xl sm:text-2xl">Confirm Your Vote</DialogTitle>
-            <DialogDescription className="text-sm sm:text-base">
-              Please review your selection before submitting.
-            </DialogDescription>
+            <DialogDescription className="text-sm sm:text-base">Please review your selection before submitting.</DialogDescription>
           </DialogHeader>
           <div className="py-4 sm:py-6">
             <p className="text-muted-foreground mb-4">You have selected:</p>
@@ -190,22 +145,16 @@ const CandidateDetail = () => {
               </Avatar>
               <div>
                 <p className="font-semibold text-base sm:text-lg">{candidate.name}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">{electionName}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">{classRow?.name ?? ""}</p>
               </div>
             </div>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground bg-muted p-3 rounded-lg">
-            ⚠️ This action cannot be undone. You can only vote once.
+            ⚠️ This action cannot be undone. You can only vote once per class.
           </p>
           <DialogFooter className="gap-2 flex-col sm:flex-row">
-            <Button variant="outline" onClick={() => setShowVoteDialog(false)} className="w-full sm:w-auto">
-              Go Back
-            </Button>
-            <Button
-              onClick={confirmVote}
-              disabled={voting}
-              className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent"
-            >
+            <Button variant="outline" onClick={() => setShowVoteDialog(false)} className="w-full sm:w-auto">Go Back</Button>
+            <Button onClick={confirmVote} disabled={voting} className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent">
               {voting ? "Submitting..." : "Confirm Vote"}
             </Button>
           </DialogFooter>

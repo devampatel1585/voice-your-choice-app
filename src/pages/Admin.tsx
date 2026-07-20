@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import Navbar from "@/components/Navbar";
@@ -8,13 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Settings, Calendar, Clock, Shield, Users, Plus, Pencil, Trash2, X, RotateCcw, Tag } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Shield, Users, Plus, Pencil, Trash2, RotateCcw, Copy, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+
+interface ClassRow {
+  id: string;
+  name: string;
+  token: string;
+  deadline: string;
+  is_active: boolean;
+}
 
 interface Candidate {
   id: string;
@@ -24,316 +33,186 @@ interface Candidate {
   manifesto: string;
   qualifications: string[];
   votes: number;
+  class_id: string;
 }
 
 const Admin = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
-  const [deadline, setDeadline] = useState("");
-  const [time, setTime] = useState("");
-  const [isActive, setIsActive] = useState(true);
-  const [saving, setSaving] = useState(false);
-  
-  // Candidate management state
+
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [classesLoading, setClassesLoading] = useState(true);
+
+  // Class form
+  const [classDialogOpen, setClassDialogOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
+  const [classForm, setClassForm] = useState({ name: "", token: "", date: "", time: "" });
+  const [savingClass, setSavingClass] = useState(false);
+  const [deleteClassDialog, setDeleteClassDialog] = useState<ClassRow | null>(null);
+
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [loadingCandidates, setLoadingCandidates] = useState(true);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
-  const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
   const [savingCandidate, setSavingCandidate] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
+
   const [restartDialogOpen, setRestartDialogOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [togglingActive, setTogglingActive] = useState(false);
-  const [electionName, setElectionName] = useState("");
-  const [savingName, setSavingName] = useState(false);
-  
-  // Form state
-  const [formData, setFormData] = useState({
-    name: "",
-    tagline: "",
-    avatar: "",
-    manifesto: "",
-    qualifications: "",
-  });
+
+  const [formData, setFormData] = useState({ name: "", tagline: "", avatar: "", manifesto: "", qualifications: "" });
+
+  const fetchClasses = useCallback(async () => {
+    setClassesLoading(true);
+    const { data } = await supabase.from("classes").select("*").order("created_at", { ascending: false });
+    if (data) {
+      setClasses(data as ClassRow[]);
+      setSelectedClassId((prev) => prev && data.some((c) => c.id === prev) ? prev : (data[0]?.id ?? ""));
+    }
+    setClassesLoading(false);
+  }, []);
+
+  const fetchCandidates = useCallback(async (classId: string) => {
+    if (!classId) { setCandidates([]); return; }
+    setLoadingCandidates(true);
+    const { data } = await supabase.from("candidates").select("*").eq("class_id", classId).order("name");
+    if (data) setCandidates(data as Candidate[]);
+    setLoadingCandidates(false);
+  }, []);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/login");
-      return;
-    }
+    if (!authLoading && !user) { navigate("/login"); return; }
+    if (!adminLoading && !isAdmin && user) { toast.error("Access denied. Admin privileges required."); navigate("/"); return; }
+    if (isAdmin) fetchClasses();
+  }, [user, authLoading, isAdmin, adminLoading, navigate, fetchClasses]);
 
-    if (!adminLoading && !isAdmin && user) {
-      toast.error("Access denied. Admin privileges required.");
-      navigate("/");
-      return;
-    }
+  useEffect(() => { fetchCandidates(selectedClassId); }, [selectedClassId, fetchCandidates]);
 
-    const fetchSettings = async () => {
-      const { data, error } = await supabase
-        .from("election_settings")
-        .select("value")
-        .eq("key", "voting_deadline")
-        .maybeSingle();
+  const selectedClass = classes.find((c) => c.id === selectedClassId) ?? null;
 
-      if (!error && data) {
-        const settings = data.value as { deadline: string; is_active: boolean };
-        const deadlineDate = new Date(settings.deadline);
-        setDeadline(format(deadlineDate, "yyyy-MM-dd"));
-        setTime(format(deadlineDate, "HH:mm"));
-        setIsActive(settings.is_active);
-      }
-    };
-
-    const fetchElectionName = async () => {
-      const { data } = await supabase
-        .from("election_settings")
-        .select("value")
-        .eq("key", "election_name")
-        .maybeSingle();
-      if (data?.value) {
-        const v = data.value as { name?: string };
-        if (v?.name) setElectionName(v.name);
-      }
-    };
-
-    const fetchCandidates = async () => {
-      setLoadingCandidates(true);
-      const { data, error } = await supabase
-        .from("candidates")
-        .select("*")
-        .order("name");
-      
-      if (!error && data) {
-        setCandidates(data);
-      }
-      setLoadingCandidates(false);
-    };
-
-    if (isAdmin) {
-      fetchSettings();
-      fetchCandidates();
-      fetchElectionName();
-    }
-  }, [user, authLoading, isAdmin, adminLoading, navigate]);
-
-  const handleSave = async () => {
-    if (!deadline || !time) {
-      toast.error("Please set both date and time");
-      return;
-    }
-
-    setSaving(true);
-    const deadlineDateTime = new Date(`${deadline}T${time}`);
-
-    const { error } = await supabase
-      .from("election_settings")
-      .update({
-        value: {
-          deadline: deadlineDateTime.toISOString(),
-          is_active: isActive,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("key", "voting_deadline");
-
-    setSaving(false);
-
-    if (error) {
-      toast.error("Failed to save settings");
+  const openClassDialog = (cls: ClassRow | null) => {
+    setEditingClass(cls);
+    if (cls) {
+      const d = new Date(cls.deadline);
+      setClassForm({ name: cls.name, token: cls.token, date: format(d, "yyyy-MM-dd"), time: format(d, "HH:mm") });
     } else {
-      toast.success("Voting deadline updated successfully!");
+      setClassForm({ name: "", token: "", date: format(new Date(Date.now() + 7 * 86400000), "yyyy-MM-dd"), time: "23:59" });
     }
+    setClassDialogOpen(true);
   };
 
-  const handleSaveElectionName = async () => {
-    const trimmed = electionName.trim();
-    if (!trimmed) {
-      toast.error("Election name cannot be empty");
-      return;
-    }
-    setSavingName(true);
-    const { error } = await supabase
-      .from("election_settings")
-      .upsert(
-        {
-          key: "election_name",
-          value: { name: trimmed },
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "key" }
-      );
-    setSavingName(false);
-    if (error) {
-      toast.error("Failed to save election name");
+  const handleSaveClass = async () => {
+    const name = classForm.name.trim();
+    const token = classForm.token.trim().toUpperCase();
+    if (!name || !token || !classForm.date || !classForm.time) { toast.error("Please fill all class fields"); return; }
+    const deadlineISO = new Date(`${classForm.date}T${classForm.time}`).toISOString();
+    setSavingClass(true);
+    if (editingClass) {
+      const { error } = await supabase.from("classes").update({ name, token, deadline: deadlineISO }).eq("id", editingClass.id);
+      setSavingClass(false);
+      if (error) { toast.error(error.message.includes("classes_token_key") ? "That token is already in use" : "Failed to update class"); return; }
+      toast.success("Class updated");
     } else {
-      toast.success("Election name updated!");
+      const { data, error } = await supabase.from("classes").insert({ name, token, deadline: deadlineISO, is_active: true }).select().single();
+      setSavingClass(false);
+      if (error) { toast.error(error.message.includes("classes_token_key") ? "That token is already in use" : "Failed to create class"); return; }
+      toast.success("Class created");
+      if (data) setSelectedClassId(data.id);
     }
+    setClassDialogOpen(false);
+    fetchClasses();
+  };
+
+  const handleDeleteClass = async () => {
+    if (!deleteClassDialog) return;
+    const { error } = await supabase.from("classes").delete().eq("id", deleteClassDialog.id);
+    if (error) { toast.error("Failed to delete class"); return; }
+    toast.success("Class deleted");
+    setDeleteClassDialog(null);
+    fetchClasses();
   };
 
   const handleToggleActive = async (newActive: boolean) => {
-    if (!deadline || !time) {
-      toast.error("Please set a deadline date and time first");
-      return;
-    }
+    if (!selectedClass) return;
     setTogglingActive(true);
-    const previous = isActive;
-    setIsActive(newActive);
-    const deadlineDateTime = new Date(`${deadline}T${time}`);
-    const { error } = await supabase
-      .from("election_settings")
-      .update({
-        value: {
-          deadline: deadlineDateTime.toISOString(),
-          is_active: newActive,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("key", "voting_deadline");
+    const { error } = await supabase.from("classes").update({ is_active: newActive }).eq("id", selectedClass.id);
     setTogglingActive(false);
-    if (error) {
-      setIsActive(previous);
-      toast.error("Failed to update voting status");
-    } else {
-      toast.success(newActive ? "Voting resumed" : "Voting stopped");
-    }
+    if (error) toast.error("Failed to update status");
+    else { toast.success(newActive ? "Voting resumed" : "Voting stopped"); fetchClasses(); }
   };
 
   const openAddDialog = () => {
+    if (!selectedClassId) { toast.error("Create a class first"); return; }
     setSelectedCandidate(null);
-    setFormData({
-      name: "",
-      tagline: "",
-      avatar: "",
-      manifesto: "",
-      qualifications: "",
-    });
+    setFormData({ name: "", tagline: "", avatar: "", manifesto: "", qualifications: "" });
     setDialogOpen(true);
   };
 
   const openEditDialog = (candidate: Candidate) => {
     setSelectedCandidate(candidate);
-    setFormData({
-      name: candidate.name,
-      tagline: candidate.tagline,
-      avatar: candidate.avatar,
-      manifesto: candidate.manifesto,
-      qualifications: candidate.qualifications.join("\n"),
-    });
+    setFormData({ name: candidate.name, tagline: candidate.tagline, avatar: candidate.avatar, manifesto: candidate.manifesto, qualifications: candidate.qualifications.join("\n") });
     setDialogOpen(true);
   };
 
-  const openDeleteDialog = (candidate: Candidate) => {
-    setCandidateToDelete(candidate);
-    setDeleteDialogOpen(true);
-  };
-
   const handleSaveCandidate = async () => {
-    if (!formData.name || !formData.tagline || !formData.avatar || !formData.manifesto) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
+    if (!formData.name || !formData.tagline || !formData.avatar || !formData.manifesto) { toast.error("Please fill in all required fields"); return; }
     setSavingCandidate(true);
-    const qualificationsArray = formData.qualifications
-      .split("\n")
-      .map((q) => q.trim())
-      .filter((q) => q.length > 0);
-
+    const qualificationsArray = formData.qualifications.split("\n").map((q) => q.trim()).filter(Boolean);
     if (selectedCandidate) {
-      // Update existing candidate
-      const { error } = await supabase
-        .from("candidates")
-        .update({
-          name: formData.name,
-          tagline: formData.tagline,
-          avatar: formData.avatar,
-          manifesto: formData.manifesto,
-          qualifications: qualificationsArray,
-        })
-        .eq("id", selectedCandidate.id);
-
-      if (error) {
-        toast.error("Failed to update candidate");
-      } else {
-        toast.success("Candidate updated successfully!");
-        setCandidates((prev) =>
-          prev.map((c) =>
-            c.id === selectedCandidate.id
-              ? { ...c, ...formData, qualifications: qualificationsArray }
-              : c
-          )
-        );
-        setDialogOpen(false);
-      }
+      const { error } = await supabase.from("candidates").update({
+        name: formData.name, tagline: formData.tagline, avatar: formData.avatar,
+        manifesto: formData.manifesto, qualifications: qualificationsArray,
+      }).eq("id", selectedCandidate.id);
+      setSavingCandidate(false);
+      if (error) { toast.error("Failed to update candidate"); return; }
+      toast.success("Candidate updated");
     } else {
-      // Add new candidate
-      const { data, error } = await supabase
-        .from("candidates")
-        .insert({
-          name: formData.name,
-          tagline: formData.tagline,
-          avatar: formData.avatar,
-          manifesto: formData.manifesto,
-          qualifications: qualificationsArray,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        toast.error("Failed to add candidate");
-      } else {
-        toast.success("Candidate added successfully!");
-        setCandidates((prev) => [...prev, data]);
-        setDialogOpen(false);
-      }
+      const { error } = await supabase.from("candidates").insert({
+        name: formData.name, tagline: formData.tagline, avatar: formData.avatar,
+        manifesto: formData.manifesto, qualifications: qualificationsArray,
+        class_id: selectedClassId,
+      });
+      setSavingCandidate(false);
+      if (error) { toast.error("Failed to add candidate"); return; }
+      toast.success("Candidate added");
     }
-    setSavingCandidate(false);
+    setDialogOpen(false);
+    fetchCandidates(selectedClassId);
   };
 
   const handleDeleteCandidate = async () => {
     if (!candidateToDelete) return;
-
-    const { error } = await supabase
-      .from("candidates")
-      .delete()
-      .eq("id", candidateToDelete.id);
-
-    if (error) {
-      toast.error("Failed to delete candidate");
-    } else {
-      toast.success("Candidate deleted successfully!");
-      setCandidates((prev) => prev.filter((c) => c.id !== candidateToDelete.id));
-    }
+    const { error } = await supabase.from("candidates").delete().eq("id", candidateToDelete.id);
+    if (error) toast.error("Failed to delete candidate");
+    else { toast.success("Candidate deleted"); fetchCandidates(selectedClassId); }
     setDeleteDialogOpen(false);
     setCandidateToDelete(null);
   };
 
   const handleRestartVoting = async () => {
-    if (!deadline || !time) {
-      toast.error("Please set a new deadline date and time first");
-      return;
-    }
+    if (!selectedClass) return;
     setRestarting(true);
-    const newDeadline = new Date(`${deadline}T${time}`);
     const { error } = await supabase.rpc("restart_voting", {
-      _new_deadline: newDeadline.toISOString(),
+      _class_id: selectedClass.id,
+      _new_deadline: selectedClass.deadline,
     });
     setRestarting(false);
     setRestartDialogOpen(false);
-    if (error) {
-      toast.error("Failed to restart voting: " + error.message);
-    } else {
-      setIsActive(true);
-      toast.success("Voting restarted! All votes cleared and students can vote again.");
-      // Refresh candidates to reflect cleared vote counts
-      const { data } = await supabase.from("candidates").select("*").order("name");
-      if (data) setCandidates(data);
-    }
+    if (error) toast.error("Failed to restart voting: " + error.message);
+    else { toast.success("Voting restarted for this class"); fetchClasses(); fetchCandidates(selectedClassId); }
   };
 
-  if (authLoading || adminLoading) {
+  const copyToken = (token: string) => {
+    navigator.clipboard.writeText(token);
+    toast.success("Token copied");
+  };
+
+  if (authLoading || adminLoading || classesLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -344,9 +223,7 @@ const Admin = () => {
     );
   }
 
-  if (!isAdmin) {
-    return null;
-  }
+  if (!isAdmin) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -359,343 +236,217 @@ const Admin = () => {
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold">Admin Panel</h1>
-              <p className="text-sm text-muted-foreground">Manage election settings and candidates</p>
+              <p className="text-sm text-muted-foreground">Manage classes, tokens, and candidates</p>
             </div>
           </div>
 
-          {/* Election Name Card */}
+          {/* Classes card */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Tag className="h-5 w-5" />
-                Election Name
-              </CardTitle>
-              <CardDescription>
-                Set the name of the current election (e.g., "B.Tech 2nd Year Election", "4th Semester Election"). This title appears across the site for students.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="electionName">Election Title</Label>
-                <Input
-                  id="electionName"
-                  value={electionName}
-                  onChange={(e) => setElectionName(e.target.value)}
-                  placeholder="e.g., B.Tech 2nd Year Election"
-                  className="h-12"
-                />
-              </div>
-              <Button
-                onClick={handleSaveElectionName}
-                disabled={savingName}
-                className="w-full h-12"
-              >
-                {savingName ? "Saving..." : "Save Election Name"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Voting Deadline Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Voting Deadline
-              </CardTitle>
-              <CardDescription>
-                Set when voting closes. Voting buttons will be hidden after this time.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>{isActive ? "Voting is Active" : "Voting is Stopped"}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Turn off to immediately stop voting. Turn on to resume voting until the deadline.
-                  </p>
-                </div>
-                <Switch
-                  checked={isActive}
-                  onCheckedChange={handleToggleActive}
-                  disabled={togglingActive}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="deadline" className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Deadline Date
-                  </Label>
-                  <Input
-                    id="deadline"
-                    type="date"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                    className="h-12"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="time" className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Deadline Time
-                  </Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    className="h-12"
-                  />
-                </div>
-              </div>
-
-              {deadline && time && (
-                <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Voting will close on:{" "}
-                    <span className="font-semibold text-foreground">
-                      {format(new Date(`${deadline}T${time}`), "PPP 'at' p")}
-                    </span>
-                  </p>
-                </div>
-              )}
-
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="w-full h-12"
-              >
-                {saving ? "Saving..." : "Save Settings"}
-              </Button>
-
-              <div className="border-t pt-4">
-                <div className="flex items-start gap-3 p-4 bg-destructive/5 border border-destructive/20 rounded-lg">
-                  <RotateCcw className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm">Restart Voting</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Clears all cast votes, resets every student's voting status, and reactivates voting using the deadline above.
-                    </p>
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setRestartDialogOpen(true)}
-                  >
-                    Restart
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Candidate Management Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Manage Candidates
-                  </CardTitle>
-                  <CardDescription>
-                    Add, edit, or remove election candidates
-                  </CardDescription>
+                  <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> Classes & Tokens</CardTitle>
+                  <CardDescription>Each class has a unique token students use to unlock their ballot.</CardDescription>
                 </div>
-                <Button onClick={openAddDialog} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Candidate
-                </Button>
+                <Button size="sm" onClick={() => openClassDialog(null)}><Plus className="h-4 w-4 mr-2" /> Add class</Button>
               </div>
             </CardHeader>
-            <CardContent>
-              {loadingCandidates ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                </div>
-              ) : candidates.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No candidates yet. Add your first candidate!
-                </div>
+            <CardContent className="space-y-3">
+              {classes.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">No classes yet. Create one to get started.</div>
               ) : (
-                <div className="space-y-4">
-                  {candidates.map((candidate) => (
-                    <div
-                      key={candidate.id}
-                      className="flex items-center gap-4 p-4 border rounded-lg"
-                    >
-                      <img
-                        src={candidate.avatar}
-                        alt={candidate.name}
-                        className="h-12 w-12 rounded-full object-cover"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold truncate">{candidate.name}</h3>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {candidate.tagline}
-                        </p>
+                classes.map((cls) => (
+                  <div key={cls.id} className={`flex items-center gap-3 p-3 sm:p-4 border rounded-lg ${cls.id === selectedClassId ? "border-primary bg-primary/5" : ""}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold truncate">{cls.name}</h3>
+                        <span className={`text-xs px-2 py-0.5 rounded ${cls.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                          {cls.is_active ? "Active" : "Stopped"}
+                        </span>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {candidate.votes} votes
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => openEditDialog(candidate)}
-                        >
-                          <Pencil className="h-4 w-4" />
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <code className="text-xs font-mono bg-muted px-2 py-0.5 rounded">{cls.token}</code>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToken(cls.token)}>
+                          <Copy className="h-3 w-3" />
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => openDeleteDialog(candidate)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <span className="text-xs text-muted-foreground">Deadline: {format(new Date(cls.deadline), "PPP p")}</span>
                       </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant={cls.id === selectedClassId ? "default" : "outline"} onClick={() => setSelectedClassId(cls.id)}>Manage</Button>
+                      <Button size="icon" variant="outline" onClick={() => openClassDialog(cls)}><Pencil className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="outline" className="text-destructive" onClick={() => setDeleteClassDialog(cls)}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </div>
+                ))
               )}
             </CardContent>
           </Card>
+
+          {selectedClass && (
+            <>
+              {/* Voting controls */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Voting controls · {selectedClass.name}</CardTitle>
+                  <CardDescription>Pause, resume, or restart voting for this class.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>{selectedClass.is_active ? "Voting is Active" : "Voting is Stopped"}</Label>
+                      <p className="text-sm text-muted-foreground">Toggle to pause or resume voting for this class.</p>
+                    </div>
+                    <Switch checked={selectedClass.is_active} onCheckedChange={handleToggleActive} disabled={togglingActive} />
+                  </div>
+                  <div className="border-t pt-4">
+                    <div className="flex items-start gap-3 p-4 bg-destructive/5 border border-destructive/20 rounded-lg">
+                      <RotateCcw className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm">Restart voting</p>
+                        <p className="text-xs text-muted-foreground mt-1">Clears all votes for this class and reopens voting until the current deadline.</p>
+                      </div>
+                      <Button variant="destructive" size="sm" onClick={() => setRestartDialogOpen(true)}>Restart</Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Candidates */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> Candidates · {selectedClass.name}</CardTitle>
+                      <CardDescription>Candidates for the selected class.</CardDescription>
+                    </div>
+                    <Button onClick={openAddDialog} size="sm"><Plus className="h-4 w-4 mr-2" /> Add candidate</Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingCandidates ? (
+                    <div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>
+                  ) : candidates.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">No candidates yet for this class.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {candidates.map((candidate) => (
+                        <div key={candidate.id} className="flex items-center gap-4 p-4 border rounded-lg">
+                          <img src={candidate.avatar} alt={candidate.name} className="h-12 w-12 rounded-full object-cover" />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold truncate">{candidate.name}</h3>
+                            <p className="text-sm text-muted-foreground truncate">{candidate.tagline}</p>
+                          </div>
+                          <div className="text-sm text-muted-foreground">{candidate.votes} votes</div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="icon" onClick={() => openEditDialog(candidate)}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="icon" onClick={() => { setCandidateToDelete(candidate); setDeleteDialogOpen(true); }} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </main>
 
-      {/* Add/Edit Candidate Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Class dialog */}
+      <Dialog open={classDialogOpen} onOpenChange={setClassDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              {selectedCandidate ? "Edit Candidate" : "Add New Candidate"}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedCandidate
-                ? "Update the candidate's information below."
-                : "Fill in the details for the new candidate."}
-            </DialogDescription>
+            <DialogTitle>{editingClass ? "Edit class" : "Add new class"}</DialogTitle>
+            <DialogDescription>Set the class name, unique token, and voting deadline.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
-                }
-                placeholder="Candidate name"
-              />
+              <Label>Class name *</Label>
+              <Input value={classForm.name} onChange={(e) => setClassForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. B.Tech 2nd Year Election" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tagline">Tagline *</Label>
-              <Input
-                id="tagline"
-                value={formData.tagline}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, tagline: e.target.value }))
-                }
-                placeholder="Brief tagline or slogan"
-              />
+              <Label>Class token *</Label>
+              <Input value={classForm.token} onChange={(e) => setClassForm((p) => ({ ...p, token: e.target.value.toUpperCase() }))} placeholder="e.g. CS3A-2026" className="uppercase tracking-wider" />
+              <p className="text-xs text-muted-foreground">Only students with this token can view or vote in this class.</p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="avatar">Avatar URL *</Label>
-              <Input
-                id="avatar"
-                value={formData.avatar}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, avatar: e.target.value }))
-                }
-                placeholder="https://example.com/avatar.jpg"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="manifesto">Manifesto *</Label>
-              <Textarea
-                id="manifesto"
-                value={formData.manifesto}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, manifesto: e.target.value }))
-                }
-                placeholder="Candidate's manifesto and goals..."
-                rows={4}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="qualifications">Qualifications (one per line)</Label>
-              <Textarea
-                id="qualifications"
-                value={formData.qualifications}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    qualifications: e.target.value,
-                  }))
-                }
-                placeholder="Previous Student Council Member&#10;3.8 GPA&#10;Club President"
-                rows={3}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Deadline date *</Label>
+                <Input type="date" value={classForm.date} onChange={(e) => setClassForm((p) => ({ ...p, date: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Deadline time *</Label>
+                <Input type="time" value={classForm.time} onChange={(e) => setClassForm((p) => ({ ...p, time: e.target.value }))} />
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveCandidate} disabled={savingCandidate}>
-              {savingCandidate
-                ? "Saving..."
-                : selectedCandidate
-                ? "Update Candidate"
-                : "Add Candidate"}
-            </Button>
+            <Button variant="outline" onClick={() => setClassDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveClass} disabled={savingClass}>{savingClass ? "Saving..." : editingClass ? "Update class" : "Create class"}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Candidate dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{selectedCandidate ? "Edit candidate" : "Add candidate"}</DialogTitle>
+            <DialogDescription>{selectedClass ? `For class: ${selectedClass.name}` : ""}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2"><Label>Name *</Label><Input value={formData.name} onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Tagline *</Label><Input value={formData.tagline} onChange={(e) => setFormData((p) => ({ ...p, tagline: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Avatar URL *</Label><Input value={formData.avatar} onChange={(e) => setFormData((p) => ({ ...p, avatar: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Manifesto *</Label><Textarea value={formData.manifesto} onChange={(e) => setFormData((p) => ({ ...p, manifesto: e.target.value }))} rows={4} /></div>
+            <div className="space-y-2"><Label>Qualifications (one per line)</Label><Textarea value={formData.qualifications} onChange={(e) => setFormData((p) => ({ ...p, qualifications: e.target.value }))} rows={3} /></div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveCandidate} disabled={savingCandidate}>{savingCandidate ? "Saving..." : selectedCandidate ? "Update" : "Add"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete candidate */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Candidate</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {candidateToDelete?.name}? This
-              action cannot be undone and will also remove all associated votes.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Delete candidate</AlertDialogTitle>
+            <AlertDialogDescription>Are you sure you want to delete {candidateToDelete?.name}? All associated votes will also be removed.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteCandidate}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteCandidate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Restart Voting Confirmation */}
+      {/* Delete class */}
+      <AlertDialog open={!!deleteClassDialog} onOpenChange={(o) => !o && setDeleteClassDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete class?</AlertDialogTitle>
+            <AlertDialogDescription>This permanently removes the class "{deleteClassDialog?.name}", all its candidates, and all votes cast in it.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteClass} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete class</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Restart voting */}
       <AlertDialog open={restartDialogOpen} onOpenChange={setRestartDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Restart voting?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete all cast votes, reset every student's voting status,
-              and reopen voting until the deadline you've set above. This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This will delete all votes in "{selectedClass?.name}" and reopen voting until the current deadline.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={restarting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRestartVoting}
-              disabled={restarting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {restarting ? "Restarting..." : "Yes, restart voting"}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleRestartVoting} disabled={restarting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{restarting ? "Restarting..." : "Yes, restart"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

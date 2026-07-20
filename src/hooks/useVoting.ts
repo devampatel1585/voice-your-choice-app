@@ -13,32 +13,43 @@ export const useVoting = () => {
       return false;
     }
 
-    if (profile.has_voted) {
-      toast.error("You have already voted");
-      return false;
-    }
-
     setVoting(true);
 
     try {
-      // Insert vote
-      const { error: voteError } = await supabase
-        .from("votes")
-        .insert({
-          student_id: profile.id,
-          candidate_id: candidateId,
-        });
+      const { data: candidate, error: candErr } = await supabase
+        .from("candidates")
+        .select("class_id")
+        .eq("id", candidateId)
+        .maybeSingle();
 
-      if (voteError) {
-        toast.error("Failed to cast vote. Please try again.");
+      if (candErr || !candidate) {
+        toast.error("Candidate not found");
         return false;
       }
 
-      // Vote count and has_voted flag are atomically updated by the database trigger
+      const { error: voteError } = await supabase.from("votes").insert({
+        student_id: profile.id,
+        candidate_id: candidateId,
+        class_id: candidate.class_id,
+      });
+
+      if (voteError) {
+        const msg = (voteError.message || "").toLowerCase();
+        if (msg.includes("already voted") || msg.includes("duplicate")) {
+          toast.error("You have already voted in this class");
+        } else if (msg.includes("deadline")) {
+          toast.error("Voting deadline has passed");
+        } else if (msg.includes("not active")) {
+          toast.error("Voting for this class is not active");
+        } else {
+          toast.error("Failed to cast vote. Please try again.");
+        }
+        return false;
+      }
 
       toast.success("Vote cast successfully!");
       return true;
-    } catch (error) {
+    } catch {
       toast.error("An error occurred. Please try again.");
       return false;
     } finally {
@@ -46,5 +57,5 @@ export const useVoting = () => {
     }
   };
 
-  return { castVote, voting, hasVoted: profile?.has_voted ?? false };
+  return { castVote, voting };
 };

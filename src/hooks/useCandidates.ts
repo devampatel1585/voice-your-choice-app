@@ -9,17 +9,25 @@ interface Candidate {
   manifesto: string;
   qualifications: string[];
   votes: number;
+  class_id: string;
 }
 
-export const useCandidates = () => {
+export const useCandidates = (classId?: string | null) => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!classId) {
+      setCandidates([]);
+      setLoading(false);
+      return;
+    }
     const fetchCandidates = async () => {
+      setLoading(true);
       const { data, error } = await supabase
         .from("candidates")
         .select("*")
+        .eq("class_id", classId)
         .order("name");
 
       if (!error && data) {
@@ -29,7 +37,7 @@ export const useCandidates = () => {
     };
 
     fetchCandidates();
-  }, []);
+  }, [classId]);
 
   return { candidates, loading };
 };

@@ -1,29 +1,29 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search } from "lucide-react";
+import { Search, LogIn, X } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import VotingStatusBanner from "@/components/VotingStatusBanner";
+import ClassTokenGate from "@/components/ClassTokenGate";
 import { useCandidates } from "@/hooks/useCandidates";
 import { useAuth } from "@/contexts/AuthContext";
-import { useVotingDeadline } from "@/hooks/useVotingDeadline";
-import { useElectionName } from "@/hooks/useElectionName";
+import { useClassAccess } from "@/hooks/useClassAccess";
 
 const Candidates = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const { candidates, loading } = useCandidates();
-  const { user } = useAuth();
-  const { deadline, isVotingOpen, loading: deadlineLoading } = useVotingDeadline();
-  const { electionName } = useElectionName();
+  const { user, loading: authLoading } = useAuth();
+  const { classInfo, deadline, isVotingOpen, loading: classLoading, clearClass } = useClassAccess();
+  const { candidates, loading } = useCandidates(classInfo?.id ?? null);
 
   const filteredCandidates = candidates.filter((candidate) =>
     candidate.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (loading || deadlineLoading) {
+  if (authLoading || classLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -34,25 +34,59 @@ const Candidates = () => {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="container mx-auto px-4 py-12 sm:py-20">
+          <div className="max-w-md mx-auto text-center">
+            <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <LogIn className="h-6 w-6 text-primary" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-3">Sign in to continue</h1>
+            <p className="text-muted-foreground mb-6">
+              Please sign in with your student account to enter your class token and view candidates.
+            </p>
+            <Button asChild size="lg" className="h-12 px-8">
+              <Link to="/login">Sign in</Link>
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!classInfo) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="container mx-auto px-4 py-12">
+          <ClassTokenGate />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-6 sm:py-8 md:py-12">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8 sm:mb-12">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+              Class token: <span className="font-mono text-foreground">{classInfo.token}</span>
+            </p>
             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent px-4">
-              {electionName}
+              {classInfo.name}
             </h1>
             <p className="text-base sm:text-lg text-muted-foreground px-4">
-              {isVotingOpen 
+              {isVotingOpen
                 ? "Vote for your representative. Click on a candidate to see their profile."
                 : "Voting has ended. View candidate profiles below."}
             </p>
-            {!user && isVotingOpen && (
-              <p className="text-sm text-primary mt-2">
-                <Link to="/login" className="underline hover:text-primary/80">Sign in</Link> to vote for your favorite candidate.
-              </p>
-            )}
+            <Button variant="ghost" size="sm" className="mt-3" onClick={() => { clearClass(); navigate("/candidates"); }}>
+              <X className="h-4 w-4 mr-1" /> Switch class
+            </Button>
           </div>
 
           <VotingStatusBanner deadline={deadline} isVotingOpen={isVotingOpen} />
@@ -67,17 +101,22 @@ const Candidates = () => {
             />
           </div>
 
-          {filteredCandidates.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            </div>
+          ) : filteredCandidates.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-muted-foreground">No candidates found matching your search.</p>
+              <p className="text-muted-foreground">
+                {candidates.length === 0
+                  ? "No candidates have been added for this class yet."
+                  : "No candidates found matching your search."}
+              </p>
             </div>
           ) : (
             <div className="grid gap-4 sm:gap-6">
               {filteredCandidates.map((candidate) => (
-                <Card
-                  key={candidate.id}
-                  className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer border-2 hover:border-primary/50"
-                >
+                <Card key={candidate.id} className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer border-2 hover:border-primary/50">
                   <Link to={`/candidate/${candidate.id}`}>
                     <CardHeader className="pb-3 sm:pb-4 p-4 sm:p-6">
                       <div className="flex items-center gap-3 sm:gap-4">
@@ -89,16 +128,12 @@ const Candidates = () => {
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <CardTitle className="text-lg sm:text-xl md:text-2xl truncate">{candidate.name}</CardTitle>
-                          <CardDescription className="text-sm sm:text-base mt-1 line-clamp-2">
-                            {candidate.tagline}
-                          </CardDescription>
+                          <CardDescription className="text-sm sm:text-base mt-1 line-clamp-2">{candidate.tagline}</CardDescription>
                         </div>
                       </div>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
-                      <Button variant="outline" className="w-full text-sm sm:text-base h-9 sm:h-10">
-                        View Profile
-                      </Button>
+                      <Button variant="outline" className="w-full text-sm sm:text-base h-9 sm:h-10">View Profile</Button>
                     </CardContent>
                   </Link>
                 </Card>

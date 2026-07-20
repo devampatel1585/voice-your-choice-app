@@ -17,6 +17,7 @@ export type Database = {
       candidates: {
         Row: {
           avatar: string
+          class_id: string
           created_at: string
           id: string
           manifesto: string
@@ -27,6 +28,7 @@ export type Database = {
         }
         Insert: {
           avatar: string
+          class_id: string
           created_at?: string
           id?: string
           manifesto: string
@@ -37,6 +39,7 @@ export type Database = {
         }
         Update: {
           avatar?: string
+          class_id?: string
           created_at?: string
           id?: string
           manifesto?: string
@@ -44,6 +47,44 @@ export type Database = {
           qualifications?: string[]
           tagline?: string
           votes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidates_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classes: {
+        Row: {
+          created_at: string
+          deadline: string
+          id: string
+          is_active: boolean
+          name: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deadline?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deadline?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          token?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -125,18 +166,21 @@ export type Database = {
       votes: {
         Row: {
           candidate_id: string
+          class_id: string
           created_at: string
           id: string
           student_id: string
         }
         Insert: {
           candidate_id: string
+          class_id: string
           created_at?: string
           id?: string
           student_id: string
         }
         Update: {
           candidate_id?: string
+          class_id?: string
           created_at?: string
           id?: string
           student_id?: string
@@ -150,9 +194,16 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "votes_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "votes_student_id_fkey"
             columns: ["student_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "students"
             referencedColumns: ["id"]
           },
@@ -170,7 +221,10 @@ export type Database = {
         }
         Returns: boolean
       }
-      restart_voting: { Args: { _new_deadline: string }; Returns: undefined }
+      restart_voting: {
+        Args: { _class_id: string; _new_deadline: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "user"
